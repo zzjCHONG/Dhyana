@@ -6,7 +6,10 @@ namespace Dhyana400BSI
 {
     public class DhyanaCamera : ICameraBackup
     {
-        public event Action<Mat>? FrameReceived;
+        public DhyanaCamera()
+        {
+            Dhyana.FrameReceived += FrameReceived;
+        }
 
         public Dictionary<InfoEnum, string> InfoDirectory
         {
@@ -422,21 +425,68 @@ namespace Dhyana400BSI
 
         #endregion
 
+        public event Action<Mat>? FrameReceived;
+        private Mat? _lastCapturedFrame;
+
+        private readonly object _lastFrameLock = new object();
+
         public bool Capture(out Mat? img)
         {
-            throw new NotImplementedException();
+            img = null;
+
+            if (Dhyana.Capture(out Mat capturedMat))
+            {
+                img = capturedMat;
+
+                // 同时更新lastFrame供SaveImage使用
+                lock (_lastFrameLock)
+                {
+                    _lastCapturedFrame?.Dispose();
+                    _lastCapturedFrame = capturedMat.Clone();
+                }
+
+                return true;
+            }
+
+            return false;
         }
 
-        public Task<Mat?> CaptureAsync()
+        /// <summary>
+        /// 异步抓取单帧
+        /// </summary>
+        public async Task<Mat?> CaptureAsync()
         {
-            throw new NotImplementedException();
+            return await Dhyana.CaptureAsync();
         }
 
         public bool Init() => Dhyana.InitializeSdk() && Dhyana.InitializeCamera();
 
+        /// <summary>
+        /// 保存最后捕获的图像
+        /// </summary>
+        /// <param name="path">保存路径</param>
         public bool SaveImage(string path)
         {
-            throw new NotImplementedException();
+            lock (_lastFrameLock)
+            {
+                if (_lastCapturedFrame == null || _lastCapturedFrame.Empty())
+                {
+                    Console.WriteLine("[ERROR] No frame available to save");
+                    return false;
+                }
+
+                try
+                {
+                    _lastCapturedFrame.SaveImage(path);
+                    Console.WriteLine($"[INFO] Image saved: {path}");
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[ERROR] Failed to save image: {ex.Message}");
+                    return false;
+                }
+            }
         }
 
         public bool StartCapture() => Dhyana.StartCapture();

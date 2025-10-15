@@ -1351,73 +1351,309 @@ namespace Dhyana400BSI
 
         #region 图像采集控制
 
+        private static Thread? _captureThread;
+        private static bool _isCapturing = false;
+        private static readonly object _captureLock = new object();
+        private static bool _bufferAllocated = false;
+        private static bool _captureStarted = false;
+
+        // 帧接收事件
+        public static event Action<Mat>? FrameReceived;
+
         /// <summary>
-        /// 开始图像采集
+        /// 开始连续视频流采集
         /// </summary>
-        /// <param name="mode">采集模式（0=连续流模式，1=软件触发）</param>
+        /// <param name="mode">采集模式（默认连续流模式）</param>
         public static bool StartCapture(TUCAM_CAPTURE_MODES mode = TUCAM_CAPTURE_MODES.TUCCM_SEQUENCE)
         {
-            // 初始化帧结构
-            m_drawframe.pBuffer = IntPtr.Zero;
-            m_drawframe.ucFormatGet = (byte)TUFRM_FORMATS.TUFRM_FMT_USUAl;
-            m_drawframe.uiRsdSize = 1;
-
-            // 获取当前触发设置
-            if (!AssertRet(TUCamAPI.TUCAM_Cap_GetTrigger(m_opCam.hIdxTUCam, ref attrTgr)))
-                return false;
-
-            // 设置触发模式
-            attrTgr.nTgrMode = (int)mode;
-
-            if (mode == TUCAM_CAPTURE_MODES.TUCCM_SEQUENCE)
+            if (_isCapturing)
             {
-                // 连续模式必须设置为1帧
+                Console.WriteLine("[WARNING] Capture already running");
+                return true;
+            }
+
+            lock (_captureLock)
+            {
+                // 初始化帧结构
+                m_drawframe.pBuffer = IntPtr.Zero;
+                m_drawframe.ucFormatGet = (byte)TUFRM_FORMATS.TUFRM_FMT_USUAl;
+                m_drawframe.uiRsdSize = 1;
+
+                // 获取并设置触发器
+                if (!AssertRet(TUCamAPI.TUCAM_Cap_GetTrigger(m_opCam.hIdxTUCam, ref attrTgr)))
+                    return false;
+
+                attrTgr.nTgrMode = (int)mode;
                 attrTgr.nFrames = 1;
                 attrTgr.nBufFrames = 2;
+
+                if (!AssertRet(TUCamAPI.TUCAM_Cap_SetTrigger(m_opCam.hIdxTUCam, attrTgr)))
+                    return false;
+
+                // 分配缓冲区
+                if (!AssertRet(TUCamAPI.TUCAM_Buf_Alloc(m_opCam.hIdxTUCam, ref m_drawframe)))
+                    return false;
+                _bufferAllocated = true;
+
+                // 开始采集
+                if (!AssertRet(TUCamAPI.TUCAM_Cap_Start(m_opCam.hIdxTUCam, (uint)attrTgr.nTgrMode)))
+                {
+                    TUCamAPI.TUCAM_Buf_Release(m_opCam.hIdxTUCam);
+                    _bufferAllocated = false;
+                    return false;
+                }
+                _captureStarted = true;
+
+                _isCapturing = true;
+
+                // 启动采集线程
+                _captureThread = new Thread(CaptureLoop)
+                {
+                    IsBackground = true,
+                    Name = "CameraCapture"
+                };
+                _captureThread.Start();
+
+                Console.WriteLine("[INFO] Continuous capture started");
+                return true;
             }
-
-            if (!AssertRet(TUCamAPI.TUCAM_Cap_SetTrigger(m_opCam.hIdxTUCam, attrTgr)))
-                return false;
-
-            // 分配缓冲区
-            if (!AssertRet(TUCamAPI.TUCAM_Buf_Alloc(m_opCam.hIdxTUCam, ref m_drawframe)))
-                return false;
-
-            // 开始采集
-            bool result = AssertRet(TUCamAPI.TUCAM_Cap_Start(m_opCam.hIdxTUCam, (uint)attrTgr.nTgrMode));
-
-            if (result)
-            {
-                Console.WriteLine($"[INFO] Capture started in {mode} mode");
-            }
-
-            return result;
         }
 
         /// <summary>
-        /// 停止图像采集
+        /// 采集循环线程
         /// </summary>
-        public static bool StartCapture()
+        private static void CaptureLoop()
         {
-            // 中止等待
-            TUCamAPI.TUCAM_Buf_AbortWait(m_opCam.hIdxTUCam);
+            DisplayFrame display = new DisplayFrame();
 
-            // 停止采集
-            bool result = AssertRet(TUCamAPI.TUCAM_Cap_Stop(m_opCam.hIdxTUCam));
-
-            // 释放缓冲区
-            TUCamAPI.TUCAM_Buf_Release(m_opCam.hIdxTUCam);
-
-            if (result)
+            while (_isCapturing)
             {
-                Console.WriteLine("[INFO] Capture stopped");
-            }
+                try
+                {
+                    TUCAM_FRAME frame = m_drawframe;
 
-            return result;
+                    if (AssertRet(TUCamAPI.TUCAM_Buf_WaitForFrame(m_opCam.hIdxTUCam, ref frame, 1000)))
+                    {
+                        if (Frame2Bytes(ref display, frame))
+                        {
+                            display.ToMat(out Mat mat);
+                            FrameReceived?.Invoke(mat);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[ERROR] Capture loop exception: {ex.Message}");
+                    Thread.Sleep(100);
+                }
+            }
         }
 
         /// <summary>
-        /// 等待并获取一帧图像
+        /// 停止连续采集
+        /// </summary>
+        public static bool StopCapture()
+        {
+            if (!_isCapturing)
+                return true;
+
+            lock (_captureLock)
+            {
+                Console.WriteLine("[INFO] Stopping capture...");
+                _isCapturing = false;
+
+                // 等待采集线程结束
+                if (_captureThread != null && _captureThread.IsAlive)
+                {
+                    if (!_captureThread.Join(5000))
+                    {
+                        Console.WriteLine("[ERROR] Capture thread did not stop in time");
+                        return false;
+                    }
+                }
+
+                bool success = true;
+
+                // 中止等待
+                if (!AssertRet(TUCamAPI.TUCAM_Buf_AbortWait(m_opCam.hIdxTUCam), true, true))
+                {
+                    Console.WriteLine("[WARNING] TUCAM_Buf_AbortWait failed");
+                    success = false;
+                }
+
+                // 停止采集
+                if (_captureStarted)
+                {
+                    if (!AssertRet(TUCamAPI.TUCAM_Cap_Stop(m_opCam.hIdxTUCam), true, true))
+                    {
+                        Console.WriteLine("[WARNING] TUCAM_Cap_Stop failed");
+                        success = false;
+                    }
+                    _captureStarted = false;
+                }
+
+                // 释放缓冲区
+                if (_bufferAllocated)
+                {
+                    if (!AssertRet(TUCamAPI.TUCAM_Buf_Release(m_opCam.hIdxTUCam), true, true))
+                    {
+                        Console.WriteLine("[WARNING] TUCAM_Buf_Release failed");
+                        success = false;
+                    }
+                    _bufferAllocated = false;
+                }
+
+                _captureThread = null;
+                Console.WriteLine($"[INFO] Capture stopped: {(success ? "Success" : "With warnings")}");
+                return success;
+            }
+        }
+
+        /// <summary>
+        /// 单张抓图（自动处理视频流状态）
+        /// </summary>
+        /// <param name="mat">输出的Mat图像</param>
+        /// <param name="timeoutMs">超时时间（毫秒）</param>
+        /// <returns>是否成功</returns>
+        public static bool Capture(out Mat mat, int timeoutMs = 10000)
+        {
+            mat = new Mat();
+
+            // 如果正在连续采集，直接获取一帧（不加锁，避免阻塞视频流）
+            if (_isCapturing)
+            {
+                try
+                {
+                    TUCAM_FRAME tempFrame = m_drawframe;
+
+                    if (!AssertRet(TUCamAPI.TUCAM_Buf_WaitForFrame(m_opCam.hIdxTUCam, ref tempFrame, timeoutMs)))
+                    {
+                        Console.WriteLine("[ERROR] Failed to wait for frame in streaming mode");
+                        return false;
+                    }
+
+                    DisplayFrame display = new DisplayFrame();
+                    if (!Frame2Bytes(ref display, tempFrame))
+                    {
+                        Console.WriteLine("[ERROR] Failed to convert frame to bytes");
+                        return false;
+                    }
+
+                    display.ToMat(out mat);
+                    Console.WriteLine($"[INFO] Single frame captured from stream: {tempFrame.usWidth}x{tempFrame.usHeight}");
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[ERROR] Capture exception in streaming mode: {ex.Message}");
+                    return false;
+                }
+            }
+
+            // 视频流未运行，临时启动采集
+            lock (_captureLock)
+            {
+                bool needCleanup = false;
+                TUCAM_FRAME tempFrame = default;
+
+                try
+                {
+                    // 初始化帧结构
+                    tempFrame.pBuffer = IntPtr.Zero;
+                    tempFrame.ucFormatGet = (byte)TUFRM_FORMATS.TUFRM_FMT_USUAl;
+                    tempFrame.uiRsdSize = 1;
+
+                    // 设置触发器
+                    TUCAM_TRIGGER_ATTR tempTrigger = default;
+                    if (!AssertRet(TUCamAPI.TUCAM_Cap_GetTrigger(m_opCam.hIdxTUCam, ref tempTrigger)))
+                        return false;
+
+                    tempTrigger.nTgrMode = (int)TUCAM_CAPTURE_MODES.TUCCM_SEQUENCE;
+                    tempTrigger.nFrames = 1;
+                    tempTrigger.nBufFrames = 2;
+
+                    if (!AssertRet(TUCamAPI.TUCAM_Cap_SetTrigger(m_opCam.hIdxTUCam, tempTrigger)))
+                        return false;
+
+                    // 分配缓冲区
+                    if (!AssertRet(TUCamAPI.TUCAM_Buf_Alloc(m_opCam.hIdxTUCam, ref tempFrame)))
+                    {
+                        Console.WriteLine("[ERROR] Failed to allocate buffer");
+                        return false;
+                    }
+                    needCleanup = true;
+
+                    // 开始采集
+                    if (!AssertRet(TUCamAPI.TUCAM_Cap_Start(m_opCam.hIdxTUCam, (uint)TUCAM_CAPTURE_MODES.TUCCM_SEQUENCE)))
+                    {
+                        Console.WriteLine("[ERROR] Failed to start capture");
+                        return false;
+                    }
+
+                    // 等待一帧
+                    if (!AssertRet(TUCamAPI.TUCAM_Buf_WaitForFrame(m_opCam.hIdxTUCam, ref tempFrame, timeoutMs)))
+                    {
+                        Console.WriteLine("[ERROR] Failed to wait for frame in single capture mode");
+                        return false;
+                    }
+
+                    // 转换为Mat
+                    DisplayFrame display = new DisplayFrame();
+                    if (!Frame2Bytes(ref display, tempFrame))
+                    {
+                        Console.WriteLine("[ERROR] Failed to convert frame to bytes");
+                        return false;
+                    }
+
+                    display.ToMat(out mat);
+                    Console.WriteLine($"[INFO] Single frame captured (standalone): {tempFrame.usWidth}x{tempFrame.usHeight}");
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[ERROR] Capture exception: {ex.Message}");
+                    return false;
+                }
+                finally
+                {
+                    // 清理临时采集资源
+                    if (needCleanup)
+                    {
+                        try
+                        {
+                            TUCamAPI.TUCAM_Buf_AbortWait(m_opCam.hIdxTUCam);
+                            TUCamAPI.TUCAM_Cap_Stop(m_opCam.hIdxTUCam);
+                            TUCamAPI.TUCAM_Buf_Release(m_opCam.hIdxTUCam);
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"[WARNING] Cleanup exception: {ex.Message}");
+                        }
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// 单张抓图
+        /// 异步版本
+        /// </summary>
+        /// <param name="timeoutMs">超时时间（毫秒）</param>
+        /// <returns>抓取的Mat图像，失败返回null</returns>
+        public static async Task<Mat?> CaptureAsync(int timeoutMs = 10000)
+        {
+            return await Task.Run(() =>
+            {
+                if (Capture(out Mat mat, timeoutMs))
+                {
+                    return mat;
+                }
+                return null;
+            });
+        }
+
+        /// <summary>
+        /// 等待并获取一帧图像（原有方法保持兼容）
         /// </summary>
         /// <param name="frame">帧数据结构</param>
         /// <param name="timeoutMs">超时时间（毫秒）</param>
@@ -1448,29 +1684,24 @@ namespace Dhyana400BSI
                 var raw = new byte[size];
                 var actualRaw = new byte[frame.uiImgSize];
 
-                // 要位移
                 Marshal.Copy(frame.pBuffer, raw, 0, size);
-
                 Buffer.BlockCopy(raw, frame.usHeader, actualRaw, 0, (int)frame.uiImgSize);
-
 
                 display.Height = height;
                 display.Width = width;
                 display.Stride = stride;
                 display.FrameObject = actualRaw;
-
                 display.Depth = frame.ucDepth;
                 display.Channels = frame.ucChannels;
 
+                return true;
             }
             catch (Exception e)
             {
-                throw new Exception("", e);
+                Console.WriteLine($"[ERROR] Frame2Bytes: {e.Message}");
+                return false;
             }
-            return true;
         }
-
-
 
         #endregion
 
