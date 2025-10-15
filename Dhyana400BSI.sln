@@ -1,9 +1,11 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
-VisualStudioVersion = 17.14.36121.58 d17.14
+VisualStudioVersion = 17.14.36121.58
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Dhyana400BSI", "Dhyana400BSI\Dhyana400BSI.csproj", "{ED1D35FA-BE72-41FE-B7F7-76FFC40B21BA}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Dhyana400BSIWpf", "Dhyana400BSIWpf\Dhyana400BSIWpf.csproj", "{C1A89096-7130-4D0F-959D-5570129A081D}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -15,6 +17,10 @@ Global
 		{ED1D35FA-BE72-41FE-B7F7-76FFC40B21BA}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{ED1D35FA-BE72-41FE-B7F7-76FFC40B21BA}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{ED1D35FA-BE72-41FE-B7F7-76FFC40B21BA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C1A89096-7130-4D0F-959D-5570129A081D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C1A89096-7130-4D0F-959D-5570129A081D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C1A89096-7130-4D0F-959D-5570129A081D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C1A89096-7130-4D0F-959D-5570129A081D}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

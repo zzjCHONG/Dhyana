@@ -1,4 +1,6 @@
-﻿using System.Diagnostics;
+﻿using OpenCvSharp;
+using System.Diagnostics;
+using System;
 using System.Runtime.InteropServices;
 
 namespace Dhyana400BSI
@@ -116,6 +118,21 @@ namespace Dhyana400BSI
             TUIMG_FORMATS.TUFMT_PNG,
             TUIMG_FORMATS.TUFMT_JPG,
             TUIMG_FORMATS.TUFMT_BMP,
+        };
+
+        /// <summary>
+        /// 此处待定
+        /// 全局增益【GlobalGain】与图像模式【ImageMode】的组合
+        /// </summary>
+        public static readonly List<string> ImageReadoutModeSet = new()
+        {
+            "高动态",//gain=0,imageMode=2
+            "高增益",//gain=1,imageMode=2
+            "高增益高速",//gain=1,imageMode=3
+            "高增益全局重置",//gain=1,imageMode=5
+            "低增益",//gain=2,imageMode=2
+            "低增益高速",//gain=2,imageMode=4
+            "低增益全局重置"//gain=2,imageMode=5
         };
 
         #endregion
@@ -365,6 +382,274 @@ namespace Dhyana400BSI
         }
 
         /// <summary>
+        /// 获取相机型号名称
+        /// </summary>
+        /// <param name="modelName">相机型号</param>
+        /// <returns>是否成功</returns>
+        public static bool GetCameraModel(ref string modelName)
+        {
+            IntPtr pText = Marshal.AllocHGlobal(64);
+            try
+            {
+                m_viCam.nID = (int)TUCAM_IDINFO.TUIDI_CAMERA_MODEL;
+                m_viCam.pText = pText;
+                m_viCam.nTextSize = 64;
+
+                if (AssertRet(TUCamAPI.TUCAM_Dev_GetInfo(m_opCam.hIdxTUCam, ref m_viCam)))
+                {
+                    modelName = Marshal.PtrToStringAnsi(m_viCam.pText) ?? string.Empty;
+                    return true;
+                }
+                return false;
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(pText);
+            }
+        }
+
+        /// <summary>
+        /// 获取相机序列号
+        /// </summary>
+        /// <param name="serialNumber">序列号</param>
+        /// <returns>是否成功</returns>
+        public static bool GetCameraSerialNumber(ref string serialNumber)
+        {
+            IntPtr pText = Marshal.AllocHGlobal(64);
+            try
+            {
+                m_regRW.nRegType = (int)TUREG_TYPE.TUREG_SN;
+                m_regRW.nBufSize = 64;
+                m_regRW.pBuf = pText;
+
+                if (AssertRet(TUCamAPI.TUCAM_Reg_Read(m_opCam.hIdxTUCam, m_regRW)))
+                {
+                    serialNumber = Marshal.PtrToStringAnsi(m_regRW.pBuf) ?? string.Empty;
+                    return true;
+                }
+                return false;
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(pText);
+            }
+        }
+
+        /// <summary>
+        /// 获取相机 Vendor ID
+        /// </summary>
+        /// <param name="vendorId">VID值</param>
+        /// <returns>是否成功</returns>
+        public static bool GetVendorId(ref int vendorId)
+        {
+            m_viCam.nID = (int)TUCAM_IDINFO.TUIDI_VENDOR;
+
+            if (AssertRet(TUCamAPI.TUCAM_Dev_GetInfo(m_opCam.hIdxTUCam, ref m_viCam)))
+            {
+                vendorId = m_viCam.nValue;
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// 获取相机 Vendor ID (十六进制字符串格式)
+        /// </summary>
+        /// <param name="vendorIdHex">VID十六进制字符串 (如 "0x1234")</param>
+        /// <returns>是否成功</returns>
+        public static bool GetVendorIdHex(ref string vendorIdHex)
+        {
+            int vid = 0;
+            if (GetVendorId(ref vid))
+            {
+                vendorIdHex = $"0x{vid:X4}";
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// 获取相机 Product ID
+        /// </summary>
+        /// <param name="productId">PID值</param>
+        /// <returns>是否成功</returns>
+        public static bool GetProductId(ref int productId)
+        {
+            m_viCam.nID = (int)TUCAM_IDINFO.TUIDI_PRODUCT;
+
+            if (AssertRet(TUCamAPI.TUCAM_Dev_GetInfo(m_opCam.hIdxTUCam, ref m_viCam)))
+            {
+                productId = m_viCam.nValue;
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// 获取相机 Product ID (十六进制字符串格式)
+        /// </summary>
+        /// <param name="productIdHex">PID十六进制字符串 (如 "0x5678")</param>
+        /// <returns>是否成功</returns>
+        public static bool GetProductIdHex(ref string productIdHex)
+        {
+            int pid = 0;
+            if (GetProductId(ref pid))
+            {
+                productIdHex = $"0x{pid:X4}";
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// 获取相机通道数
+        /// </summary>
+        /// <param name="channels">通道数</param>
+        /// <returns>是否成功</returns>
+        public static bool GetCameraChannels(ref int channels)
+        {
+            m_viCam.nID = (int)TUCAM_IDINFO.TUIDI_CAMERA_CHANNELS;
+
+            if (AssertRet(TUCamAPI.TUCAM_Dev_GetInfo(m_opCam.hIdxTUCam, ref m_viCam)))
+            {
+                channels = m_viCam.nValue;
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// 获取 USB 总线类型值
+        /// </summary>
+        /// <param name="busType">总线类型值</param>
+        /// <returns>是否成功</returns>
+        public static bool GetBusType(ref int busType)
+        {
+            m_viCam.nID = (int)TUCAM_IDINFO.TUIDI_BUS;
+
+            if (AssertRet(TUCamAPI.TUCAM_Dev_GetInfo(m_opCam.hIdxTUCam, ref m_viCam)))
+            {
+                busType = m_viCam.nValue;
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// 获取 USB 类型 (2.0 或 3.0)
+        /// </summary>
+        /// <param name="usbType">USB类型字符串</param>
+        /// <returns>是否成功</returns>
+        public static bool GetUsbType(ref string usbType)
+        {
+            int busType = 0;
+            if (GetBusType(ref busType))
+            {
+                usbType = (busType == 0x200 || busType == 0x210) ? "2.0" : "3.0";
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// 获取固件版本值
+        /// </summary>
+        /// <param name="firmwareVersion">固件版本值</param>
+        /// <returns>是否成功</returns>
+        public static bool GetFirmwareVersion(ref int firmwareVersion)
+        {
+            m_viCam.nID = (int)TUCAM_IDINFO.TUIDI_VERSION_FRMW;
+
+            if (AssertRet(TUCamAPI.TUCAM_Dev_GetInfo(m_opCam.hIdxTUCam, ref m_viCam)))
+            {
+                firmwareVersion = m_viCam.nValue;
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// 获取固件版本 (十六进制字符串格式)
+        /// </summary>
+        /// <param name="firmwareVersionHex">固件版本十六进制字符串</param>
+        /// <returns>是否成功</returns>
+        public static bool GetFirmwareVersionHex(ref string firmwareVersionHex)
+        {
+            int fwVer = 0;
+            if (GetFirmwareVersion(ref fwVer))
+            {
+                firmwareVersionHex = $"0x{fwVer:X}";
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// 获取 API 版本
+        /// </summary>
+        /// <param name="apiVersion">API版本字符串</param>
+        /// <returns>是否成功</returns>
+        public static bool GetApiVersion(ref string apiVersion)
+        {
+            IntPtr pText = Marshal.AllocHGlobal(64);
+            try
+            {
+                m_viCam.nID = (int)TUCAM_IDINFO.TUIDI_VERSION_API;
+                m_viCam.pText = pText;
+                m_viCam.nTextSize = 64;
+
+                if (AssertRet(TUCamAPI.TUCAM_Dev_GetInfo(m_opCam.hIdxTUCam, ref m_viCam)))
+                {
+                    apiVersion = Marshal.PtrToStringAnsi(m_viCam.pText) ?? string.Empty;
+                    return true;
+                }
+                return false;
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(pText);
+            }
+        }
+
+        /// <summary>
+        /// 获取完整的相机信息字典
+        /// </summary>
+        /// <returns>包含所有相机信息的字典</returns>
+        public static Dictionary<string, string> GetCameraInfoDictionary()
+        {
+            var info = new Dictionary<string, string>();
+
+            string strValue = string.Empty;
+            int intValue = 0;
+
+            if (GetCameraModel(ref strValue))
+                info["Camera Model"] = strValue;
+
+            if (GetCameraSerialNumber(ref strValue))
+                info["Serial Number"] = strValue;
+
+            if (GetVendorIdHex(ref strValue))
+                info["Vendor ID"] = strValue;
+
+            if (GetProductIdHex(ref strValue))
+                info["Product ID"] = strValue;
+
+            if (GetCameraChannels(ref intValue))
+                info["Channels"] = intValue.ToString();
+
+            if (GetUsbType(ref strValue))
+                info["USB Type"] = strValue;
+
+            if (GetFirmwareVersionHex(ref strValue))
+                info["Firmware Version"] = strValue;
+
+            if (GetApiVersion(ref strValue))
+                info["API Version"] = strValue;
+
+            return info;
+        }
+
+        /// <summary>
         /// 获取相机当前温度
         /// </summary>
         /// <returns>温度值（范围-50℃到50℃）</returns>
@@ -380,7 +665,7 @@ namespace Dhyana400BSI
         }
 
         #endregion
-
+        
         #region Capability控制 - 相机能力参数设置
 
         /// <summary>
@@ -517,8 +802,11 @@ namespace Dhyana400BSI
             if (mode > 0 && !GetHistogramEnable())
             {
                 Console.WriteLine("[WARNING] Histogram must be enabled before setting auto levels");
-                SetHistogramEnable(true);
             }
+
+            //尝试开启直方图统计
+            //实测：需处于采集状态时才可正常开启，即成功设置TUCAM_Cap_Start后方可开启
+            if (!SetHistogramEnable(true)) return false;
 
             return AssertRet(TUCamAPI.TUCAM_Capa_SetValue(m_opCam.hIdxTUCam,
                 (int)TUCAM_IDCAPA.TUIDC_ATLEVELS, mode));
@@ -526,6 +814,7 @@ namespace Dhyana400BSI
 
         /// <summary>
         /// 获取自动色阶模式
+        /// 共0~3四种模式，0为手动，其余为自动
         /// </summary>
         public static bool GetAutoLevels(ref int mode)
         {
@@ -631,8 +920,44 @@ namespace Dhyana400BSI
                 Console.WriteLine($"[ERROR] Invalid auto exposure mode: {mode}");
                 return false;
             }
-            return AssertRet(TUCamAPI.TUCAM_Capa_SetValue(m_opCam.hIdxTUCam,
-                (int)TUCAM_IDCAPA.TUIDC_ATEXPOSURE_MODE, mode));
+            var res = AssertRet(TUCamAPI.TUCAM_Capa_SetValue(m_opCam.hIdxTUCam, (int)TUCAM_IDCAPA.TUIDC_ATEXPOSURE_MODE, mode));
+            Thread.Sleep(2000);//官方SDK标配，必须要有
+
+            return res;
+        }
+
+        /// <summary>
+        /// 获取自动曝光状态
+        /// </summary>
+        /// <param name="value"></param>
+        /// <returns></returns>
+        public static bool GetAutoExposure(ref int value)
+            => AssertRet(TUCamAPI.TUCAM_Capa_GetValue(m_opCam.hIdxTUCam, (int)TUCAM_IDCAPA.TUIDC_ATEXPOSURE, ref value));
+
+        /// <summary>
+        /// 获取自动曝光状态
+        /// </summary>
+        /// <param name="enable"></param>
+        /// <returns></returns>
+        public static bool GetAutoExposure(out bool enable)
+        {
+            int value = -1;
+            var res = AssertRet(TUCamAPI.TUCAM_Capa_GetValue(m_opCam.hIdxTUCam, (int)TUCAM_IDCAPA.TUIDC_ATEXPOSURE, ref value));
+            enable = value == 1;
+            return res;
+        }
+
+        /// <summary>
+        /// 获取帧率
+        /// 精度 0.1
+        /// </summary>
+        /// <param name="value"></param>
+        /// <returns></returns>
+        public static bool GetFrameRate(ref double value)
+        {
+            value = 0;
+            var rec = AssertRet(TUCamAPI.TUCAM_Prop_GetValue(m_opCam.hIdxTUCam,   (int)TUCAM_IDPROP.TUIDP_FRAME_RATE, ref value, 0));
+            return rec;
         }
 
         #endregion
@@ -715,6 +1040,7 @@ namespace Dhyana400BSI
         /// 设置黑电平值
         /// 范围：1-8191，步进：1
         /// 用于调整图像最暗部分的偏移量
+        /// 无法设置
         /// </summary>
         /// <param name="level">黑电平值</param>
         public static bool SetBlackLevel(double level)
@@ -730,6 +1056,7 @@ namespace Dhyana400BSI
 
         /// <summary>
         /// 获取黑电平值
+        /// 忽略
         /// </summary>
         public static bool GetBlackLevel(ref double level)
         {
@@ -1070,7 +1397,7 @@ namespace Dhyana400BSI
         /// <summary>
         /// 停止图像采集
         /// </summary>
-        public static bool StopCapture()
+        public static bool StartCapture()
         {
             // 中止等待
             TUCamAPI.TUCAM_Buf_AbortWait(m_opCam.hIdxTUCam);
@@ -1094,7 +1421,7 @@ namespace Dhyana400BSI
         /// </summary>
         /// <param name="frame">帧数据结构</param>
         /// <param name="timeoutMs">超时时间（毫秒）</param>
-        public static bool WaitForFrame(ref TUCAM_FRAME frame, int timeoutMs = 1000)
+        public static bool WaitForFrame(ref TUCAM_FRAME frame, int timeoutMs = 10000)
         {
             return AssertRet(TUCamAPI.TUCAM_Buf_WaitForFrame(m_opCam.hIdxTUCam, ref frame, timeoutMs));
         }
@@ -1107,6 +1434,44 @@ namespace Dhyana400BSI
             return AssertRet(TUCamAPI.TUCAM_Buf_CopyFrame(m_opCam.hIdxTUCam, ref frame));
         }
 
+        private static bool Frame2Bytes(ref DisplayFrame display, TUCAM_FRAME frame)
+        {
+            try
+            {
+                if (frame.pBuffer == IntPtr.Zero) return false;
+
+                int width = frame.usWidth;
+                int height = frame.usHeight;
+                int stride = (int)frame.uiWidthStep;
+
+                var size = (int)(frame.uiImgSize + frame.usHeader);
+                var raw = new byte[size];
+                var actualRaw = new byte[frame.uiImgSize];
+
+                // 要位移
+                Marshal.Copy(frame.pBuffer, raw, 0, size);
+
+                Buffer.BlockCopy(raw, frame.usHeader, actualRaw, 0, (int)frame.uiImgSize);
+
+
+                display.Height = height;
+                display.Width = width;
+                display.Stride = stride;
+                display.FrameObject = actualRaw;
+
+                display.Depth = frame.ucDepth;
+                display.Channels = frame.ucChannels;
+
+            }
+            catch (Exception e)
+            {
+                throw new Exception("", e);
+            }
+            return true;
+        }
+
+
+
         #endregion
 
         #region 图像保存
@@ -1116,7 +1481,7 @@ namespace Dhyana400BSI
         /// </summary>
         /// <param name="path">保存路径（SDK只支持\\分隔符）</param>
         /// <param name="formatId">格式ID (0=RAW, 1=TIF, 2=PNG, 3=JPG, 4=BMP)</param>
-        public static bool SaveCurrentFrame(TUCAM_FRAME frame,string path, int formatId = 1)
+        public static bool SaveCurrentFrame(TUCAM_FRAME frame, string path, int formatId = 1)
         {
             if (formatId < 0 || formatId >= SaveFormatList.Count)
             {
@@ -1299,8 +1664,7 @@ namespace Dhyana400BSI
         /// <summary>
         /// 设置计算ROI（用于自动白平衡、自动对焦等）
         /// </summary>
-        public static bool SetCalculateRoi(TUCAM_IDCROI calcType, bool enable,
-            int width, int height, int hOffset = 0, int vOffset = 0)
+        public static bool SetCalculateRoi(TUCAM_IDCROI calcType, bool enable, int width, int height, int hOffset = 0, int vOffset = 0)
         {
             TUCAM_CALC_ROI_ATTR calcRoi = default;
             calcRoi.bEnable = enable;
@@ -1328,18 +1692,18 @@ namespace Dhyana400BSI
         /// <summary>
         /// 快速设置：图像增强
         /// </summary>
-        public static bool QuickSetupImageEnhancement(int imageMode = 1, int globalGain = 0,   bool histogramEnable = true, int autoLevels = 3)
+        public static bool QuickSetupImageEnhancement(int imageMode = 1, int globalGain = 0, bool histogramEnable = true, int autoLevels = 3)
         {
             bool success = true;
 
             success &= SetImageMode(imageMode);
             success &= SetGlobalGain(globalGain);
-            //success &= SetHistogramEnable(histogramEnable);
+            success &= SetHistogramEnable(histogramEnable);
 
-            //if (histogramEnable)
-            //{
-            //    success &= SetAutoLevels(autoLevels);
-            //}
+            if (histogramEnable)
+            {
+                success &= SetAutoLevels(autoLevels);
+            }
 
             if (success)
             {
@@ -1355,49 +1719,65 @@ namespace Dhyana400BSI
         /// <param name="savePath">保存路径（可选）</param>
         /// <param name="format">保存格式（1=TIF）</param>
         /// <param name="timeoutMs">超时时间</param>
-        public static bool QuickCaptureSingleFrame(string savePath = null, int format = 1, int timeoutMs = 10000)
+        public static bool QuickCaptureSingleFrame(string savePath = "", int format = 1, int timeoutMs = 10000)
         {
-            // 确保之前的资源已经清理
-            try
-            {
-                // 如果有残留的缓冲区，先释放
-                TUCamAPI.TUCAM_Buf_Release(m_opCam.hIdxTUCam);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"清理残留缓冲区时出错: {ex.Message}");
-            }
-
-            // 开始采集
-            if (!StartCapture(TUCAM_CAPTURE_MODES.TUCCM_SEQUENCE))
-                return false;
+            TUCAM_FRAME frame = default;
+            frame.pBuffer = IntPtr.Zero;
+            frame.ucFormatGet = (byte)TUFRM_FORMATS.TUFRM_FMT_USUAl;
+            frame.uiRsdSize = 1;
 
             try
             {
-                var res = TUCamAPI.TUCAM_Capa_SetValue(m_opCam.hIdxTUCam, (int)TUCAM_IDCAPA.TUIDC_HISTC, 1);
-                Console.WriteLine("TUIDC_HISTC_" + res);
-
-                // 等待一帧
-                if (!WaitForFrame(ref m_drawframe, timeoutMs))
+                // 分配缓冲区
+                if (!AssertRet(TUCamAPI.TUCAM_Buf_Alloc(m_opCam.hIdxTUCam, ref frame)))
                 {
-                    Console.WriteLine("[ERROR] Failed to capture frame");
+                    Console.WriteLine("[ERROR] Failed to allocate buffer");
                     return false;
                 }
 
-                Console.WriteLine($"[INFO] Frame captured: {m_drawframe.usWidth}x{m_drawframe.usHeight}, " +
-                                $"depth={m_drawframe.ucDepth}bit, index={m_drawframe.uiIndex}");
+                // 开始采集
+                if (!AssertRet(TUCamAPI.TUCAM_Cap_Start(m_opCam.hIdxTUCam,
+                    (uint)TUCAM_CAPTURE_MODES.TUCCM_SEQUENCE)))
+                {
+                    Console.WriteLine("[ERROR] Failed to start capture");
+                    TUCamAPI.TUCAM_Buf_Release(m_opCam.hIdxTUCam);
+                    return false;
+                }
+
+                // 启用直方图（如果需要自动色阶）
+                TUCamAPI.TUCAM_Capa_SetValue(m_opCam.hIdxTUCam, (int)TUCAM_IDCAPA.TUIDC_HISTC, 1);
+
+                // 等待一帧
+                if (!AssertRet(TUCamAPI.TUCAM_Buf_WaitForFrame(m_opCam.hIdxTUCam, ref frame, timeoutMs)))
+                {
+                    Console.WriteLine("[ERROR] Failed to wait for frame");
+                    return false;
+                }
+
+                Console.WriteLine($"[INFO] Frame captured: {frame.usWidth}x{frame.usHeight},depth={frame.ucDepth}bit, index={frame.uiIndex} ");
 
                 // 保存（如果指定了路径）
                 if (!string.IsNullOrEmpty(savePath))
                 {
-                    return SaveCurrentFrame(m_drawframe, savePath, format);
+                    if (!SaveCurrentFrame(frame, savePath, format))
+                    {
+                        Console.WriteLine("[ERROR] Failed to save frame");
+                        return false;
+                    }
                 }
 
+                var display = new DisplayFrame();
+                Frame2Bytes(ref display, frame);
+                display.ToMat(out Mat matImg);
+                matImg.SaveImage(savePath+"_########.tif");
                 return true;
             }
             finally
             {
-                StopCapture();
+                // 停止采集
+                TUCamAPI.TUCAM_Buf_AbortWait(m_opCam.hIdxTUCam);
+                TUCamAPI.TUCAM_Cap_Stop(m_opCam.hIdxTUCam);
+                TUCamAPI.TUCAM_Buf_Release(m_opCam.hIdxTUCam);
             }
         }
 
@@ -1465,6 +1845,306 @@ namespace Dhyana400BSI
             return status.ToString();
         }
 
+        /// <summary>
+        /// 快速设置：温度控制
+        /// </summary>
+        /// <param name="targetTempCelsius">目标温度（摄氏度，范围-50到50）</param>
+        /// <param name="fanGear">风扇档位</param>
+        public static bool QuickSetupTemperature(double targetTempCelsius = -20, int fanGear = 1)
+        {
+            bool success = true;
+
+            // 转换温度：实际温度 = SDK值 - 50
+            double sdkTemp = targetTempCelsius + 50;
+
+            if (sdkTemp < 0 || sdkTemp > 100)
+            {
+                Console.WriteLine($"[ERROR] Temperature out of range (-50 to 50°C)");
+                return false;
+            }
+
+            success &= SetTemperature(sdkTemp);
+            success &= SetFanGear(fanGear);
+
+            if (success)
+            {
+                Console.WriteLine($"[INFO] Temperature control setup: Target={targetTempCelsius}°C, Fan={FanGear[fanGear]}");
+            }
+
+            return success;
+        }
+
+        /// <summary>
+        /// 快速设置：图像处理参数
+        /// </summary>
+        public static bool QuickSetupImageProcessing(  double blackLevel = 100, double noiseLevel = 1,  double gamma = 100,  double contrast = 128)
+        {
+            bool success = true;
+
+            success &= SetBlackLevel(blackLevel);
+            success &= SetNoiseLevel(noiseLevel);
+            success &= SetGamma(gamma);
+            success &= SetContrast(contrast);
+
+            if (success)
+            {
+                Console.WriteLine("[INFO] Image processing setup completed");
+            }
+
+            return success;
+        }
+
+        /// <summary>
+        /// 快速设置：自动曝光
+        /// </summary>
+        public static bool QuickSetupAutoExposure(  bool enable = true,  int mode = 0,   double brightness = 128)
+        {
+            bool success = true;
+
+            success &= SetAutoExposure(enable);
+
+            if (enable)
+            {
+                success &= SetAutoExposureMode(mode);
+                if (mode == 0) // 居中模式才需要设置亮度
+                {
+                    success &= SetBrightness(brightness);
+                }
+            }
+
+            if (success)
+            {
+                Console.WriteLine($"[INFO] Auto exposure setup: Enabled={enable}, Mode={mode}, Brightness={brightness}");
+            }
+
+            return success;
+        }
+
+        #region Valid
+
+        /// <summary>
+        /// 验证并打印所有基础设置
+        /// </summary>
+        public static void ValidateBasicSettings()
+        {
+            Console.WriteLine("\n=== Validating Basic Settings ===");
+
+            // 分辨率
+            int res = 0;
+            if (GetResolution(ref res))
+            {
+                Console.WriteLine($"✓ Resolution: {Resolutions[res]} (ID={res})");
+            }
+
+            // 水平翻转
+            if (GetHorizontal(out bool hFlip))
+            {
+                Console.WriteLine($"✓ Horizontal Flip: {(hFlip ? "Enabled" : "Disabled")}");
+            }
+
+            // 垂直翻转
+            if (GetVertical(out bool vFlip))
+            {
+                Console.WriteLine($"✓ Vertical Flip: {(vFlip ? "Enabled" : "Disabled")}");
+            }
+
+            // 风扇档位
+            int fan = 0;
+            if (GetFanGear(ref fan))
+            {
+                Console.WriteLine($"✓ Fan Gear: {FanGear[fan]} (ID={fan})");
+            }
+
+            // 曝光时间
+            double exposure = 0;
+            if (GetExposure(ref exposure))
+            {
+                Console.WriteLine($"✓ Exposure Time: {exposure} μs ({exposure / 1000.0:F2} ms)");
+            }
+
+            // LED状态（只能设置，无法获取）
+            Console.WriteLine("  LED: Set only (no get method)");
+        }
+
+        /// <summary>
+        /// 验证并打印所有图像增强设置
+        /// </summary>
+        public static void ValidateImageEnhancementSettings()
+        {
+            Console.WriteLine("\n=== Validating Image Enhancement Settings ===");
+
+            // 图像模式
+            int imgMode = 0;
+            if (GetImageMode(ref imgMode))
+            {
+                Console.WriteLine($"✓ Image Mode: {ImageMode[imgMode - 1]} (ID={imgMode})");
+            }
+
+            // 全局增益
+            double gain = 0;
+            if (GetGlobalGain(ref gain))
+            {
+                int gainId = (int)gain;
+                if (gainId >= 0 && gainId < GlobalGain.Count)
+                {
+                    Console.WriteLine($"✓ Global Gain: {GlobalGain[gainId]} (ID={gainId})");
+                }
+            }
+
+            // 直方图统计
+            bool histEnabled = GetHistogramEnable();
+            Console.WriteLine($"✓ Histogram: {(histEnabled ? "Enabled" : "Disabled")}");
+
+            // 自动色阶
+            int autoLevel = 0;
+            if (GetAutoLevels(ref autoLevel))
+            {
+                Console.WriteLine($"✓ Auto Levels: {Levels[autoLevel]} (ID={autoLevel})");
+            }
+
+            // 左右色阶
+            if (GetLeftLevels(out double left) && GetRightLevels(out double right))
+            {
+                Console.WriteLine($"✓ Levels Range: Left={left}, Right={right}");
+            }
+        }
+
+        /// <summary>
+        /// 验证并打印所有图像处理参数
+        /// </summary>
+        public static void ValidateImageProcessingSettings()
+        {
+            Console.WriteLine("\n=== Validating Image Processing Settings ===");
+
+            // 黑电平
+            double blackLevel = 0;
+            if (GetBlackLevel(ref blackLevel))
+            {
+                Console.WriteLine($"✓ Black Level: {blackLevel}");
+            }
+
+            // 亮度
+            double brightness = 0;
+            if (GetBrightness(ref brightness))
+            {
+                Console.WriteLine($"✓ Brightness: {brightness}");
+            }
+
+            // 降噪等级
+            double noise = 0;
+            if (GetNoiseLevel(ref noise))
+            {
+                Console.WriteLine($"✓ Noise Level: {noise}");
+            }
+
+            // 伽马
+            if (GetGamma(out double gamma))
+            {
+                Console.WriteLine($"✓ Gamma: {gamma}");
+            }
+
+            // 对比度
+            if (GetContrast(out double contrast))
+            {
+                Console.WriteLine($"✓ Contrast: {contrast}");
+            }
+        }
+
+        /// <summary>
+        /// 验证并打印温度设置
+        /// </summary>
+        public static void ValidateTemperatureSettings()
+        {
+            Console.WriteLine("\n=== Validating Temperature Settings ===");
+
+            double tempTarget = 0;
+            if (GetTemperature(ref tempTarget))
+            {
+                double actualTemp = tempTarget - 50;
+                Console.WriteLine($"✓ Target Temperature: {actualTemp}°C (Raw={tempTarget})");
+            }
+
+            double currentTemp = GetCurrentTemperature();
+            Console.WriteLine($"✓ Current Temperature: {currentTemp}°C");
+        }
+
+        /// <summary>
+        /// 验证并打印ROI设置
+        /// </summary>
+        public static void ValidateROISettings()
+        {
+            Console.WriteLine("\n=== Validating ROI Settings ===");
+
+            TUCAM_ROI_ATTR roi = default;
+            if (GetRoi(ref roi))
+            {
+                if (roi.bEnable)
+                {
+                    Console.WriteLine($"✓ ROI: Enabled");
+                    Console.WriteLine($"  Size: {roi.nWidth}x{roi.nHeight}");
+                    Console.WriteLine($"  Offset: ({roi.nHOffset}, {roi.nVOffset})");
+                }
+                else
+                {
+                    Console.WriteLine($"✓ ROI: Disabled (Full Frame)");
+                }
+            }
+        }
+
+        /// <summary>
+        /// 验证并打印触发器设置
+        /// </summary>
+        public static void ValidateTriggerSettings()
+        {
+            Console.WriteLine("\n=== Validating Trigger Settings ===");
+
+            TUCAM_TRIGGER_ATTR trigger = default;
+            if (GetTrigger(ref trigger))
+            {
+                Console.WriteLine($"✓ Trigger Mode: {(TUCAM_CAPTURE_MODES)trigger.nTgrMode}");
+                Console.WriteLine($"  Frames: {trigger.nFrames}");
+                Console.WriteLine($"  Buffer Frames: {trigger.nBufFrames}");
+                Console.WriteLine($"  Edge Mode: {trigger.nEdgeMode}");
+                Console.WriteLine($"  Exposure Mode: {trigger.nExpMode}");
+            }
+        }
+
+        /// <summary>
+        /// 验证并打印滚动扫描设置
+        /// </summary>
+        public static void ValidateRollingScanSettings()
+        {
+            Console.WriteLine("\n=== Validating Rolling Scan Settings ===");
+
+            int mode = 0;
+            if (GetRollingScanMode(ref mode))
+            {
+                Console.WriteLine($"✓ Rolling Scan Mode: {RollingScanMode[mode]} (ID={mode})");
+            }
+        }
+
+        /// <summary>
+        /// 验证所有设置
+        /// </summary>
+        public static void ValidateAllSettings()
+        {
+            Console.WriteLine("\n" + new string('=', 60));
+            Console.WriteLine("COMPLETE CAMERA SETTINGS VALIDATION");
+            Console.WriteLine(new string('=', 60));
+
+            ValidateBasicSettings();
+            ValidateImageEnhancementSettings();
+            ValidateImageProcessingSettings();
+            ValidateTemperatureSettings();
+            ValidateROISettings();
+            ValidateTriggerSettings();
+            ValidateRollingScanSettings();
+
+            Console.WriteLine("\n" + new string('=', 60));
+        }
+
+        #endregion
+
         #endregion
 
         #region 辅助工具方法
@@ -1477,10 +2157,10 @@ namespace Dhyana400BSI
             if (GetExposureAttr(out TUCAM_PROP_ATTR attr))
             {
                 Console.WriteLine("=== Exposure Time Range ===");
-                Console.WriteLine($"Minimum  : {attr.dbValMin} μs");
-                Console.WriteLine($"Maximum  : {attr.dbValMax} μs");
-                Console.WriteLine($"Step     : {attr.dbValStep} μs");
-                Console.WriteLine($"Default  : {attr.dbValDft} μs");
+                Console.WriteLine($"Minimum  : {attr.dbValMin} ms");
+                Console.WriteLine($"Maximum  : {attr.dbValMax} ms");
+                Console.WriteLine($"Step     : {attr.dbValStep} ms");
+                Console.WriteLine($"Default  : {attr.dbValDft} ms");
             }
         }
 
@@ -1508,7 +2188,7 @@ namespace Dhyana400BSI
         /// <param name="exposureUs"></param>
         /// <param name="fanGear"></param>
         /// <returns></returns>
-        public static bool QuickSetupBasic(int resolution = 0, bool autoExposure = true,  double exposureUs = 1000, int fanGear = 1)
+        public static bool QuickSetupBasic(int resolution = 0, bool autoExposure = true, double exposureUs = 1000, int fanGear = 1)
         {
             bool success = true;
 
@@ -1531,90 +2211,53 @@ namespace Dhyana400BSI
 
         #endregion
 
-        #region 使用示例
+    }
 
-        /// <summary>
-        /// 完整的使用示例
-        /// </summary>
-        public static void UsageExample()
+    public class DisplayFrame
+    {
+        public byte[] FrameObject { get; set; } = Array.Empty<byte>();
+
+        public int Height { get; set; } = 0;
+
+        public int Width { get; set; } = 0;
+
+        public int Stride { get; set; } = 0;
+
+        public byte Depth { get; set; } = 0;
+
+        public byte Channels { get; set; } = 0;
+
+        public Mat? Image { get; set; }
+
+        public void ToMat(out Mat mat)
         {
-            Console.WriteLine("=== Dhyana 400BSI Camera Usage Example ===\n");
+            // 假设 FrameObject 是一个 byte[] 数组
+            var data = (byte[])FrameObject;
 
-            // 1. 初始化SDK
-            if (!InitializeSdk())
+            // 1. 创建 MatType
+            int type = (int)MatType.MakeType(Depth, Channels);
+
+            // 2. 使用 GCHandle 固定托管数组的内存
+            GCHandle handle = GCHandle.Alloc(data, GCHandleType.Pinned);
+
+            try
             {
-                Console.WriteLine("Failed to initialize SDK");
-                return;
+                // 3. 获取指向内存块的稳定指针 (IntPtr)
+                IntPtr ptr = handle.AddrOfPinnedObject();
+
+                // 4. 【已修改】使用推荐的静态方法 Mat.FromPixelData 创建 Mat 对象
+                // 这个方法同样不会复制数据，而是直接引用您提供的内存
+                mat = Mat.FromPixelData(Height, Width, type, ptr);
             }
-
-            // 2. 打开相机
-            if (!InitializeCamera(0))
+            finally
             {
-                Console.WriteLine("Failed to open camera");
-                UninitializeSdk();
-                return;
-            }
-
-            // 3. 基础配置
-            Console.WriteLine("\n--- Setting up camera ---");
-            QuickSetupBasic(
-                resolution: 0,        // 2048x2048 Normal=0
-                autoExposure: false,
-                exposureUs: 60,    // 50ms= 50000
-                fanGear: 2            // Medium=1
-            );
-
-            // 4. 图像增强设置
-            QuickSetupImageEnhancement(
-                imageMode: 2,         // HDR
-                globalGain: 0       // High gain
-
-                //histogramEnable: true,
-                //autoLevels: 3         // 全自动色阶
-            );
-
-            // 5. 设置ROI（可选）
-            // SetRoi(1024, 1024, 512, 512);
-
-            // 6. 打印当前状态
-            Console.WriteLine("\n" + GetCameraStatus());
-
-            // 7. 采集单帧
-            Console.WriteLine("\n--- Capturing single frame ---");
-            var file = @"C:\Users\Administrator\Desktop\tucamtest\" + $"{DateTime.Now.ToString("HH-mm-ss-fff")}.tif";
-            QuickCaptureSingleFrame(file, format: 1);//"./test_image.tif"
-
-            //// 8. 录制视频（可选）
-            //// Console.WriteLine("\n--- Recording video ---");
-            //// RecordVideo("./test_video.avi", frameCount: 100, fps: 25f);
-
-            // 9. 连续采集示例
-            Console.WriteLine("\n--- Continuous capture (10 frames) ---");
-            if (StartCapture(TUCAM_CAPTURE_MODES.TUCCM_SEQUENCE))
-            {
-                var res = TUCamAPI.TUCAM_Capa_SetValue(m_opCam.hIdxTUCam, (int)TUCAM_IDCAPA.TUIDC_HISTC, 1);
-                Console.WriteLine("TUIDC_HISTC_" + res);
-
-                for (int i = 0; i < 3; i++)
+                // 5. 无论成功与否，都必须释放 GCHandle，否则会造成内存泄漏
+                if (handle.IsAllocated)
                 {
-                    if (WaitForFrame(ref m_drawframe, 10000))
-                    {
-                        Console.WriteLine($"Frame {i + 1}: {m_drawframe.usWidth}x{m_drawframe.usHeight},index={m_drawframe.uiIndex}");
-                    }
+                    handle.Free();
                 }
-
-                StopCapture();
             }
 
-            // 10. 清理资源
-            Console.WriteLine("\n--- Cleaning up ---");
-            UninitializeCamera();
-            UninitializeSdk();
-
-            Console.WriteLine("\n=== Example completed ===");
         }
-
-        #endregion
-
     }
 }
