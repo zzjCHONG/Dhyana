@@ -139,12 +139,12 @@ public interface ICameraBackup
     /// <summary>
     /// 当前模式色阶上下限
     /// </summary>
-    public (double Left, double Right) LevelRange { get; }
+    public (int Min, int Max) LevelRange { get; }
 
     /// <summary>
     /// 当前实际左右色阶
     /// </summary>
-    public (double Left, double Right) CurrentLevel { get; set; }
+    public (int Left, int Right) CurrentLevel { get; set; }
 
     /// <summary>
     /// 存取图片
@@ -167,11 +167,6 @@ public interface ICameraBackup
     /// 当前捕获结果刷新
     /// </summary>
     public event Action<Mat> FrameReceived;
-
-    ///// <summary>
-    ///// 线程优先
-    ///// </summary>
-    //public Dispatcher? SafeThreading { get; set; }
 
     /// <summary>
     /// 伪彩设置
@@ -214,7 +209,7 @@ public interface ICameraBackup
     /// </summary>
     /// <param name="resolution"></param>
     /// <returns></returns>
-    public bool SetImageMode(int resolution);
+    public bool SetImageMode(int imageMode);
 
     /// <summary>
     /// 获取图像模式
@@ -242,5 +237,24 @@ public interface ICameraBackup
     /// </summary>
     /// <returns></returns>
     public bool DisableROI();
+
+    /// <summary>
+    /// 获取增益模式
+    /// </summary>
+    /// <returns></returns>
+    public List<string> GainList { get; }
+
+    /// <summary>
+    /// 设置组合模式，该硬件共7种
+    /// </summary>
+    /// <param name="resolution"></param>
+    /// <returns></returns>
+    public bool SetCompositeMode(int mode);
+
+    /// <summary>
+    /// 获取组合模式
+    /// </summary>
+    /// <returns></returns>
+    public List<string> CompositeModeList { get; }
 
 }

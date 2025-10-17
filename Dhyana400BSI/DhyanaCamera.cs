@@ -1,14 +1,29 @@
 ﻿using OpenCvSharp;
 using Simscop.Spindisk.Core.Constants;
 using Simscop.Spindisk.Core.Interfaces;
+using System.Diagnostics;
 
 namespace Dhyana400BSI
 {
     public class DhyanaCamera : ICameraBackup
     {
-        public DhyanaCamera()
+        public bool Init()
         {
-            Dhyana.FrameReceived += FrameReceived;
+            var res = Dhyana.InitializeSdk() && Dhyana.InitializeCamera();
+
+            InitDefaultSetting();
+            return res;
+        }
+
+        void InitDefaultSetting()
+        {
+            int currentResolution = 0;
+            Dhyana.GetResolution(ref currentResolution);
+            UpdateROIOptionsForResolution(currentResolution);
+
+            Dhyana.SetNoiseLevel(0);
+            Dhyana.SetFanGear(2);
+            Dhyana.SetLedEnable(true);
         }
 
         public Dictionary<InfoEnum, string> InfoDirectory
@@ -72,16 +87,18 @@ namespace Dhyana400BSI
             {
                 if (Dhyana.GetGamma(out double gamma))
                 {
-                    // SDK范围 0-255，转换为 -1 到 1
-                    return (gamma - 127.5) / 127.5;
+                    return gamma;
+                    //// SDK范围 0-255，转换为 -1 到 1
+                    //return (gamma - 127.5) / 127.5;
                 }
                 return 0;
             }
             set
             {
-                // 转换：-1到1 映射到 0-255
-                double sdkValue = (value + 1.0) * 127.5;
-                sdkValue = Math.Clamp(sdkValue, 0, 255);
+                //// 转换：-1到1 映射到 0-255
+                //double sdkValue = (value + 1.0) * 127.5;
+                //sdkValue = Math.Clamp(sdkValue, 0, 255);
+                double sdkValue = Math.Clamp(value, 0, 255);
                 Dhyana.SetGamma(sdkValue);
             }
         }
@@ -92,16 +109,19 @@ namespace Dhyana400BSI
             {
                 if (Dhyana.GetContrast(out double contrast))
                 {
-                    // SDK范围 0-255，转换为 -1 到 1
-                    return (contrast - 127.5) / 127.5;
+                    return contrast;
+                    //// SDK范围 0-255，转换为 -1 到 1
+                    //return (contrast - 127.5) / 127.5;
                 }
                 return 0;
             }
             set
             {
-                // 转换：-1到1 映射到 0-255
-                double sdkValue = (value + 1.0) * 127.5;
-                sdkValue = Math.Clamp(sdkValue, 0, 255);
+                //// 转换：-1到1 映射到 0-255
+                //double sdkValue = (value + 1.0) * 127.5;
+                //sdkValue = Math.Clamp(sdkValue, 0, 255);
+
+                double sdkValue = Math.Clamp(value, 0, 255);
                 Dhyana.SetContrast(sdkValue);
             }
         }
@@ -113,19 +133,25 @@ namespace Dhyana400BSI
                 double brightness = 0;
                 if (Dhyana.GetBrightness(ref brightness))
                 {
-                    // SDK范围 20-255，转换为 -1 到 1
-                    return (brightness - 137.5) / 117.5;
+                    return brightness;
+                    //// SDK范围 20-255，转换为 -1 到 1
+                    //return (brightness - 137.5) / 117.5;
                 }
                 return 0;
             }
             set
             {
-                // 转换：-1到1 映射到 20-255
-                double sdkValue = (value * 117.5) + 137.5;
-                sdkValue = Math.Clamp(sdkValue, 20, 255);
+                //// 转换：-1到1 映射到 20-255
+                //double sdkValue = (value * 117.5) + 137.5;
+                //sdkValue = Math.Clamp(sdkValue, 20, 255);
+
+
+                double sdkValue = Math.Clamp(value, 20, 255);
                 Dhyana.SetBrightness(sdkValue);
             }
         }
+
+        public List<string> GainList => Dhyana.GlobalGain;
 
         public ushort Gain
         {
@@ -225,7 +251,7 @@ namespace Dhyana400BSI
             }
         }
 
-        public (double Left, double Right) CurrentLevel
+        public (int Left, int Right) CurrentLevel
         {
             get
             {
@@ -235,8 +261,8 @@ namespace Dhyana400BSI
             }
             set
             {
-                double left = Math.Clamp(value.Left, LevelRange.Left, LevelRange.Right);
-                double right = Math.Clamp(value.Right, LevelRange.Left, LevelRange.Right);
+                int left = Math.Clamp(value.Left, LevelRange.Min, LevelRange.Max);
+                int right = Math.Clamp(value.Right, LevelRange.Min, LevelRange.Max);
 
                 Dhyana.SetLeftLevels(left);
                 Dhyana.SetRightLevels(right);
@@ -282,7 +308,20 @@ namespace Dhyana400BSI
                 return false;
             }
 
-            return Dhyana.SetResolution(resolution);
+            if (!StopCapture()) return false;
+
+            var res = Dhyana.SetResolution(resolution);
+
+            if (res)
+            {
+                // 分辨率改变后，更新可用的 ROI 选项
+                UpdateROIOptionsForResolution(resolution);
+                Console.WriteLine($"[INFO] Resolution changed to index {resolution}");
+            }
+
+            if (!StartCapture()) return false;
+
+            return res;
         }
 
         public List<string> ResolutionsList => Dhyana.Resolutions;
@@ -295,15 +334,13 @@ namespace Dhyana400BSI
                 return false;
             }
 
-            // Dhyana SDK 的 ImageMode 是从 1 开始的
-            return Dhyana.SetImageMode(imageMode + 1);
+            return Dhyana.SetImageMode(imageMode+1);
         }
 
         public List<string> ImageModesList => Dhyana.ImageMode;
 
         public void SetROI(int width, int height, int offsetX, int offsetY)
         {
-
             // 调整为4的倍数
             width = (width >> 2) << 2;
             height = (height >> 2) << 2;
@@ -316,6 +353,8 @@ namespace Dhyana400BSI
             }
             else
             {
+                Console.WriteLine($"[INFO] ROI set successfully: {width}x{height} at ({offsetX}, {offsetY})");
+
                 // 更新 ROI 列表
                 UpdateROIsList();
             }
@@ -330,57 +369,179 @@ namespace Dhyana400BSI
         public bool DisableROI()
         {
             var result = Dhyana.DisableRoi();
-            if (result) UpdateROIsList();
+            if (result)
+            {
+                Console.WriteLine("[INFO] ROI disabled, using full frame");
+                UpdateROIsList();
+            }
+            else
+            {
+                Console.WriteLine("[ERROR] Failed to disable ROI");
+            }
             return result;
+        }
+
+        /// <summary>
+        /// 根据分辨率更新可用的 ROI 选项列表
+        /// </summary>
+        private void UpdateROIOptionsForResolution(int resolutionIndex)
+        {
+            _roiList.Clear();
+
+            // 根据分辨率获取最大尺寸
+            var (maxWidth, maxHeight) = resolutionIndex switch
+            {
+                0 => (2048, 2048), // 2048x2048 标准
+                1 => (2048, 2048), // 2048x2048 增强
+                2 => (1024, 1024), // 1024x1024 2x2Bin
+                3 => (512, 512),   // 512x512 4x4Bin
+                _ => (2048, 2048)  // 默认
+            };
+
+            // 根据最大尺寸生成 ROI 选项
+            if (maxWidth >= 2048)
+            {
+                _roiList.Add("2048 x 2048");
+                _roiList.Add("1024 x 1024");
+                _roiList.Add("512 x 512");
+                _roiList.Add("512 x 128");
+                _roiList.Add("256 x 256");
+                _roiList.Add("128 x 128");
+            }
+            else if (maxWidth >= 1024)
+            {
+                _roiList.Add("1024 x 1024");
+                _roiList.Add("512 x 512");
+                _roiList.Add("512 x 128");
+                _roiList.Add("256 x 256");
+                _roiList.Add("128 x 128");
+            }
+            else if (maxWidth >= 512)
+            {
+                _roiList.Add("512 x 512");
+                _roiList.Add("256 x 256");
+                _roiList.Add("128 x 128");
+                _roiList.Add("64 x 64");
+            }
+
+            // 总是添加自定义选项
+            _roiList.Add("自定义ROI");
+
+            // 添加全画幅选项（禁用 ROI）
+            _roiList.Add($"全画幅 ({maxWidth}x{maxHeight})");
+
+            Console.WriteLine($"[INFO] ROI options updated for resolution {resolutionIndex}: {string.Join(", ", _roiList)}");
+        }
+
+        public List<string> CompositeModeList => Dhyana.CompositeModeList;
+
+        public bool SetCompositeMode(int imageMode)
+        {
+            //需要停止采集后再打开
+
+            if (imageMode < 0 || imageMode >= Dhyana.CompositeModeList.Count)
+            {
+                Console.WriteLine($"[ERROR] Invalid CompositeMode index: {imageMode}");
+                return false;
+            }
+            if (!StopCapture()) return false;
+      
+          
+            bool success = true;
+            switch (imageMode)
+            {
+                case 0://高动态-16bit
+                    success &= Dhyana.SetGlobalGain(0);
+                    success &= Dhyana.SetImageMode(2);
+                    break;
+                case 1://高增益-11bit
+                    success &= Dhyana.SetGlobalGain(1);
+                    success &= Dhyana.SetImageMode(2);
+                    break;
+                case 2://高增益高速-12bit
+                    success &= Dhyana.SetGlobalGain(1);
+                    success &= Dhyana.SetImageMode(3);
+                    break;
+                case 3://高增益全局重置-12bit
+                    success &= Dhyana.SetGlobalGain(1);
+                    success &= Dhyana.SetImageMode(5);
+                    break;
+                case 4://低增益-11bit
+                    success &= Dhyana.SetGlobalGain(2);
+                    success &= Dhyana.SetImageMode(2);
+                    break;
+                case 5://低增益高速-12bit
+                    success &= Dhyana.SetGlobalGain(2);
+                    success &= Dhyana.SetImageMode(4);
+                    break;
+                case 6://低增益全局重置-12bit
+                    success &= Dhyana.SetGlobalGain(2);
+                    success &= Dhyana.SetImageMode(5);
+                    break;
+                default:
+                    break;
+            }
+
+            if (!StartCapture()) return false;
+            return success;
         }
 
         #region 
 
-        private int _imageDepth = 16;//默认获得16UC1图像
-
-        public (double Left, double Right) LevelRange
+        public (int Min, int Max) LevelRange
         {
             get
             {
-                // 根据图像深度返回范围
-                int maxValue = _imageDepth == 8 ? 255 : 65535;
-                return (1, maxValue);
+                int maxValue = ImageDetph switch
+                {
+                    8 => 255,       // 8bit
+                    11 => 2047,      // 11bit
+                    12 => 4095,      // 12bit
+                    16 => 65535,     // 16bit
+                    _ => 255        // 默认值（防止异常）
+                };
+
+                return (0, maxValue);
             }
         }
 
+
         public int ImageDetph
         {
-            get => _imageDepth;
+            get
+            {
+                int bits = 0;
+                Dhyana.GetCameraBits(ref bits);
+                return bits;
+            }
             set
             {
-                // Dhyana 支持 8/11/12/16 bit
-                // 简化为 8 或 16
-                _imageDepth = (value <= 8) ? 8 : 16;
+                //// Dhyana 支持 8/11/12/16 bit
+                //// 简化为 8 或 16
+                //_imageDepth = (value <= 8) ? 8 : 16;
+                throw new NotImplementedException();
             }
         }
 
         private readonly List<string> _roiList = new();
+
         /// <summary>
-        /// 更新 ROI 列表信息
+        /// 更新 ROI 状态信息（原有方法，保持用于显示当前 ROI 状态）
         /// </summary>
-        private void UpdateROIsList()
+        private static void UpdateROIsList()
         {
-            _roiList.Clear();
+            // 这个方法保持原样，用于显示当前 ROI 的详细状态
+            // 但不再用于更新可选 ROI 列表
 
             TUCAM_ROI_ATTR roi = default;
             if (Dhyana.GetRoi(ref roi))
             {
                 if (roi.bEnable)
                 {
-                    _roiList.Add($"Enabled: {roi.nWidth}x{roi.nHeight}");
-                    _roiList.Add($"Position: ({roi.nHOffset}, {roi.nVOffset})");
-                    _roiList.Add($"Range: X[{roi.nHOffset}-{roi.nHOffset + roi.nWidth}], Y[{roi.nVOffset}-{roi.nVOffset + roi.nHeight}]");
+                    Console.WriteLine($"[INFO] Current ROI: {roi.nWidth}x{roi.nHeight} at ({roi.nHOffset}, {roi.nVOffset})");
                 }
                 else
                 {
-                    _roiList.Add("ROI: Disabled (Full Frame)");
-
-                    // 获取当前分辨率作为全画幅尺寸
                     int resId = 0;
                     if (Dhyana.GetResolution(ref resId))
                     {
@@ -392,14 +553,16 @@ namespace Dhyana400BSI
                             3 => "512x512",
                             _ => "Unknown"
                         };
-                        _roiList.Add($"Full Frame Size: {size}");
+                        Console.WriteLine($"[INFO] ROI disabled, using full frame: {size}");
                     }
                 }
             }
         }
+
         #endregion
 
-        #region 硬件无法实现
+        #region 当前硬件无法实现
+
         public event Action<bool>? OnDisConnectState;
 
         public int ClockwiseRotation { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
@@ -425,73 +588,321 @@ namespace Dhyana400BSI
 
         #endregion
 
+        private Thread? _captureThread;
+        private CancellationTokenSource? _cts;
+        private readonly object _lockObj = new();
+        private Mat? _latestFrame;
+        private bool _isCapturing = false;
         public event Action<Mat>? FrameReceived;
-        private Mat? _lastCapturedFrame;
 
-        private readonly object _lastFrameLock = new object();
+        /// <summary>
+        /// 启动图像采集（连续模式）
+        /// </summary>
+        public bool StartCapture()
+        {
+            if (_isCapturing)
+            {
+                Console.WriteLine("[WARNING] Capture already started");
+                return true;
+            }
 
+            if (!Dhyana.StartCapture())
+            {
+                Console.WriteLine("[ERROR] Failed to start camera capture");
+                return false;
+            }
+
+            _isCapturing = true;
+            _cts = new CancellationTokenSource();
+            _captureThread = new Thread(() => CaptureLoop(_cts.Token))
+            {
+                IsBackground = true,
+                Name = "CameraCaptureThread",
+            };
+            _captureThread.Start();
+
+            Console.WriteLine("[INFO] Continuous capture thread started");
+            return true;
+        }
+
+        /// <summary>
+        /// 停止图像采集
+        /// </summary>
+        public bool StopCapture()
+        {
+            if (!_isCapturing)
+            {
+                Console.WriteLine("[INFO] Capture not running");
+                return true;
+            }
+
+            Console.WriteLine("[INFO] Stopping capture...");
+
+            _isCapturing = false;
+
+            _cts?.Cancel();
+
+            if (_captureThread != null)
+            {
+                if (!_captureThread.Join(5000))
+                {
+                    Console.WriteLine("[WARNING] Capture thread did not stop within timeout");
+                }
+                else
+                {
+                    Console.WriteLine("[INFO] Capture thread stopped gracefully");
+                }
+            }
+
+            bool result = Dhyana.StopCapture();
+
+            _cts?.Dispose();
+            _cts = null;
+            _captureThread = null;
+
+            lock (_lockObj)
+            {
+                _latestFrame?.Dispose();
+                _latestFrame = null;
+            }
+
+            if (result)
+            {
+                Console.WriteLine("[INFO] Capture stopped successfully");
+            }
+            else
+            {
+                Console.WriteLine("[ERROR] Failed to stop capture");
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// 将11bit或12bit图像转换为标准16bit（左移补齐高位）
+        /// </summary>
+        private Mat? NormalizeTo16Bit(Mat source, int bitDepth)
+        {
+            if (source == null || source.Empty())
+                return null;
+
+            // 如果已经是16bit且数据已标准化，直接返回
+            if (bitDepth == 16)
+                return source.Clone();
+
+            // 计算需要左移的位数
+            int leftShift = 16 - bitDepth;
+
+            if (leftShift <= 0)
+                return source.Clone();
+
+            Mat output = new Mat();
+
+            // 左移补齐到16bit
+            // 11bit: 左移5位 (0-2047 -> 0-65504)
+            // 12bit: 左移4位 (0-4095 -> 0-65520)
+            source.ConvertTo(output, MatType.CV_16UC1);
+            output *= (1 << leftShift);
+
+            return output;
+        }
+
+        /// <summary>
+        /// 连续采集循环（后台线程）
+        /// </summary>
+        private void CaptureLoop(CancellationToken token)
+        {
+            while (!token.IsCancellationRequested && _isCapturing)
+            {
+                Mat? mat = null;
+                Mat? normalized = null;
+
+                try
+                {
+                    int bitDepth = 0;
+                    Dhyana.GetCameraBits(ref bitDepth);// 11, 12, 或 16
+
+                    if (Dhyana.Capture(out mat) && mat != null && !mat.Empty())
+                    {
+                        normalized = NormalizeTo16Bit(mat, bitDepth);
+
+                        if (normalized != null && !normalized.Empty())
+                        {
+                            lock (_lockObj)
+                            {
+                                _latestFrame?.Dispose();
+                                _latestFrame = normalized.Clone();
+                            }
+
+                            try
+                            {
+                                FrameReceived?.Invoke(normalized.Clone());
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"[ERROR] FrameReceived event handler exception: {ex.Message}");
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[ERROR] Capture loop exception: {ex.Message}");
+                    Thread.Sleep(100);
+                }
+                finally
+                {
+                    mat?.Dispose();
+                    normalized?.Dispose();
+                }
+
+                Thread.Sleep(10);
+            }
+            Console.WriteLine("[INFO] Capture loop exited");
+        }
+
+        /// <summary>
+        /// 获取单帧图像（同步方法）
+        /// 如果已启动连续采集，返回最新帧；否则执行单次采集
+        /// </summary>
         public bool Capture(out Mat? img)
         {
             img = null;
 
-            if (Dhyana.Capture(out Mat capturedMat))
+            try
             {
-                img = capturedMat;
-
-                // 同时更新lastFrame供SaveImage使用
-                lock (_lastFrameLock)
+                if (_isCapturing)
                 {
-                    _lastCapturedFrame?.Dispose();
-                    _lastCapturedFrame = capturedMat.Clone();
+                    // 连续采集模式：返回最新帧的副本
+                    lock (_lockObj)
+                    {
+                        if (_latestFrame != null && !_latestFrame.Empty())
+                        {
+                            img = _latestFrame.Clone();
+                            return true;
+                        }
+                    }
+                    Console.WriteLine("[WARNING] No frame available yet");
+                    return false;
                 }
+                else
+                {
+                    // 单次采集模式：需要先启动后采集再停止
+                    if (!Dhyana.StartCapture(TUCAM_CAPTURE_MODES.TUCCM_TRIGGER_SOFTWARE))
+                    {
+                        Console.WriteLine("[ERROR] Failed to start single capture");
+                        return false;
+                    }
 
-                return true;
+                    int bitDepth = 0;
+                    Dhyana.GetCameraBits(ref bitDepth);
+                    bool success = Dhyana.Capture(out Mat mat);
+                    Dhyana.StopCapture();
+
+                    if (success && mat != null && !mat.Empty())
+                    {
+                        // 转换为标准16bit
+                        img = NormalizeTo16Bit(mat, bitDepth);
+                        mat.Dispose();
+                        return img != null;
+                    }
+
+                    Console.WriteLine("[ERROR] Failed to capture single frame");
+                    return false;
+                }
             }
-
-            return false;
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[ERROR] Capture exception: {ex.Message}");
+                return false;
+            }
         }
 
         /// <summary>
-        /// 异步抓取单帧
+        /// 保存当前图像到指定路径
+        /// </summary>
+        public bool SaveImage(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                Console.WriteLine("[ERROR] Invalid save path");
+                return false;
+            }
+
+            try
+            {
+                Mat? imageToSave = null;
+
+                if (_isCapturing)
+                {
+                    // 连续采集模式：保存最新帧
+                    lock (_lockObj)
+                    {
+                        if (_latestFrame != null && !_latestFrame.Empty())
+                        {
+                            imageToSave = _latestFrame.Clone();
+                        }
+                    }
+                }
+                else
+                {
+                    // 单次采集模式：采集一帧后保存
+                    if (!Capture(out imageToSave) || imageToSave == null)
+                    {
+                        Console.WriteLine("[ERROR] Failed to capture image for saving");
+                        return false;
+                    }
+                }
+
+                if (imageToSave == null || imageToSave.Empty())
+                {
+                    Console.WriteLine("[ERROR] No image to save");
+                    return false;
+                }
+
+                // 确保目录存在
+                string? directory = System.IO.Path.GetDirectoryName(path);
+                if (!string.IsNullOrEmpty(directory) && !System.IO.Directory.Exists(directory))
+                {
+                    System.IO.Directory.CreateDirectory(directory);
+                }
+
+                // 保存图像
+                bool success = Cv2.ImWrite(path, imageToSave);
+                imageToSave.Dispose();
+
+                if (success)
+                {
+                    Console.WriteLine($"[INFO] Image saved to: {path}");
+                }
+                else
+                {
+                    Console.WriteLine($"[ERROR] Failed to save image to: {path}");
+                }
+
+                return success;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[ERROR] SaveImage exception: {ex.Message}");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// 异步获取单帧图像
         /// </summary>
         public async Task<Mat?> CaptureAsync()
         {
-            return await Dhyana.CaptureAsync();
-        }
-
-        public bool Init() => Dhyana.InitializeSdk() && Dhyana.InitializeCamera();
-
-        /// <summary>
-        /// 保存最后捕获的图像
-        /// </summary>
-        /// <param name="path">保存路径</param>
-        public bool SaveImage(string path)
-        {
-            lock (_lastFrameLock)
+            return await Task.Run(() =>
             {
-                if (_lastCapturedFrame == null || _lastCapturedFrame.Empty())
+                if (Capture(out Mat? mat))
                 {
-                    Console.WriteLine("[ERROR] No frame available to save");
-                    return false;
+                    return mat;
                 }
-
-                try
-                {
-                    _lastCapturedFrame.SaveImage(path);
-                    Console.WriteLine($"[INFO] Image saved: {path}");
-                    return true;
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"[ERROR] Failed to save image: {ex.Message}");
-                    return false;
-                }
-            }
+                return null;
+            });
         }
-
-        public bool StartCapture() => Dhyana.StartCapture();
-
-        public bool StopCapture() => Dhyana.StopCapture();
 
     }
 }

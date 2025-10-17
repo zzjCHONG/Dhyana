@@ -22,7 +22,7 @@
                 Margin="2,5"
                 BorderThickness="1"
                 CornerRadius="8">
-                <StackPanel>
+                <StackPanel IsEnabled="{Binding PropControlIsEnable}">
 
                     <StackPanel.Resources>
                         <Style TargetType="GroupBox">
@@ -81,298 +81,80 @@
 
                     <GroupBox Header="亮度" IsEnabled="{Binding IsStartAcquisition}">
                         <DockPanel>
-                            <liftui:NumericUpDown
+
+                            <TextBox
+                                x:Name="BrightnessTextBox"
                                 Width="75"
-                                Height="30"
-                                Padding="8,7,5,5"
-                                HorizontalAlignment="Center"
+                                HorizontalAlignment="Stretch"
                                 DockPanel.Dock="Right"
-                                FontSize="12"
-                                Increment="0.1"
-                                Maximum="1"
-                                Minimum="-1"
-                                ValueFormat="N2"
-                                Value="{Binding ElementName=BrightnessSlider, Path=Value, Delay=300}" />
+                                KeyDown="BrightnessTextBox_KeyDown"
+                                Text="{Binding Brightness, StringFormat={}{0:F0}, Mode=TwoWay, UpdateSourceTrigger=Explicit}"
+                                ToolTip="Enter确认输入" />
+
                             <Slider
                                 x:Name="BrightnessSlider"
                                 Margin="-5,0,10,0"
                                 VerticalAlignment="Center"
                                 IsSnapToTickEnabled="True"
-                                LargeChange="0.1"
-                                Maximum="1"
-                                Minimum="-1"
-                                SmallChange="0.1"
-                                TickFrequency="0.1"
+                                Maximum="255"
+                                Minimum="20"
                                 Value="{Binding Brightness, Mode=TwoWay, Delay=100}" />
                         </DockPanel>
                     </GroupBox>
 
                     <GroupBox Header="对比度" IsEnabled="{Binding IsStartAcquisition}">
                         <DockPanel>
-                            <liftui:NumericUpDown
+                            <TextBox
+                                x:Name="ContrastTextBox"
                                 Width="75"
-                                Height="30"
-                                Padding="8,7,5,5"
+                                HorizontalAlignment="Stretch"
                                 DockPanel.Dock="Right"
-                                FontSize="12"
-                                Increment="0.1"
-                                Maximum="1"
-                                Minimum="-1"
-                                ValueFormat="N2"
-                                Value="{Binding ElementName=ContrastSlider, Path=Value, Delay=300}" />
+                                KeyDown="ContrastTextBox_KeyDown"
+                                Text="{Binding Contrast, StringFormat={}{0:F0}, Mode=TwoWay, UpdateSourceTrigger=Explicit}"
+                                ToolTip="Enter确认输入" />
+
                             <Slider
                                 x:Name="ContrastSlider"
                                 Margin="-5,0,10,0"
                                 VerticalAlignment="Center"
                                 IsSnapToTickEnabled="True"
-                                LargeChange="0.1"
-                                Maximum="1"
-                                Minimum="-1"
-                                SmallChange="0.1"
-                                TickFrequency="0.1"
+                                Maximum="255"
+                                Minimum="0"
                                 Value="{Binding Contrast, Mode=TwoWay, Delay=100}" />
                         </DockPanel>
                     </GroupBox>
 
                     <GroupBox Header="伽玛" IsEnabled="{Binding IsStartAcquisition}">
                         <DockPanel>
-                            <liftui:NumericUpDown
+                            <TextBox
+                                x:Name="GammaTextBox"
                                 Width="75"
-                                Height="30"
-                                Padding="8,7,5,5"
+                                HorizontalAlignment="Stretch"
                                 DockPanel.Dock="Right"
-                                FontSize="12"
-                                Increment="0.1"
-                                Maximum="1"
-                                Minimum="-1"
-                                ValueFormat="N2"
-                                Value="{Binding ElementName=GammaSlider, Path=Value, Delay=300}" />
+                                KeyDown="GammaTextBox_KeyDown"
+                                Text="{Binding Gamma, StringFormat={}{0:F0}, Mode=TwoWay, UpdateSourceTrigger=Explicit}"
+                                ToolTip="Enter确认输入" />
                             <Slider
                                 x:Name="GammaSlider"
                                 Margin="-5,0,10,0"
                                 VerticalAlignment="Center"
                                 IsSnapToTickEnabled="True"
-                                LargeChange="0.1"
-                                Maximum="1"
-                                Minimum="-1"
-                                SmallChange="0.1"
-                                TickFrequency="0.01"
+                                Maximum="255"
+                                Minimum="0"
                                 Value="{Binding Gamma, Mode=TwoWay, Delay=100}" />
                         </DockPanel>
                     </GroupBox>
 
-                    <GroupBox
-                        Header="色温"
-                        IsEnabled="{Binding IsStartAcquisition}"
-                        Visibility="Collapsed">
-                        <DockPanel>
-                            <liftui:NumericUpDown
-                                Width="75"
-                                Height="30"
-                                Padding="8,7,5,5"
-                                HorizontalAlignment="Center"
-                                DockPanel.Dock="Right"
-                                FontSize="12"
-                                Increment="100"
-                                Maximum="15000"
-                                Minimum="2000"
-                                ValueFormat="N0"
-                                Value="{Binding ElementName=TemperatureSlider, Path=Value, Delay=300}" />
-                            <Slider
-                                x:Name="TemperatureSlider"
-                                Margin="-5,0,10,0"
-                                VerticalAlignment="Center"
-                                IsSnapToTickEnabled="True"
-                                Maximum="15000"
-                                Minimum="2000"
-                                TickFrequency="100"
-                                Value="{Binding Temperature, Mode=TwoWay, Delay=100}" />
-                        </DockPanel>
-                    </GroupBox>
-
-                    <GroupBox
-                        Header="色调"
-                        IsEnabled="{Binding IsStartAcquisition}"
-                        Visibility="Collapsed">
-                        <DockPanel>
-                            <liftui:NumericUpDown
-                                Width="75"
-                                Height="30"
-                                Padding="8,7,5,5"
-                                HorizontalAlignment="Center"
-                                DockPanel.Dock="Right"
-                                FontSize="12"
-                                Increment="100"
-                                Maximum="2500"
-                                Minimum="200"
-                                ValueFormat="N0"
-                                Value="{Binding ElementName=TintSlider, Path=Value, Delay=300}" />
-                            <Slider
-                                x:Name="TintSlider"
-                                Margin="-5,0,10,0"
-                                VerticalAlignment="Center"
-                                IsSnapToTickEnabled="True"
-                                Maximum="2500"
-                                Minimum="200"
-                                TickFrequency="100"
-                                Value="{Binding Tint, Mode=TwoWay, Delay=100}" />
-                        </DockPanel>
-                    </GroupBox>
-
-                    <GroupBox
-                        Header="增益"
-                        IsEnabled="{Binding IsStartAcquisition}"
-                        Visibility="Collapsed">
-                        <DockPanel>
-                            <liftui:NumericUpDown
-                                Width="75"
-                                Height="30"
-                                Padding="8,7,5,5"
-                                HorizontalAlignment="Center"
-                                DockPanel.Dock="Right"
-                                FontSize="12"
-                                Increment="1"
-                                Maximum="5000"
-                                Minimum="100"
-                                ValueFormat="N0"
-                                Value="{Binding ElementName=GainSlider, Path=Value, Delay=300}" />
-                            <Slider
-                                x:Name="GainSlider"
-                                Margin="-5,0,10,0"
-                                VerticalAlignment="Center"
-                                IsSnapToTickEnabled="True"
-                                Maximum="5000"
-                                Minimum="100"
-                                TickFrequency="1"
-                                Value="{Binding Gain, Mode=TwoWay, Delay=100}" />
-                        </DockPanel>
-                    </GroupBox>
-
-                    <GroupBox
-                        Header="增益选择"
-                        IsEnabled="{Binding IsStartAcquisition}"
-                        Visibility="Collapsed">
-                        <StackPanel HorizontalAlignment="Center" Orientation="Horizontal">
-                            <!--  HDR CheckBox  -->
-                            <CheckBox
-                                x:Name="HDRCheckBox"
-                                IsChecked="{Binding IsHDRSelected}"
-                                ToolTip="高动态(HDR) - 增益值: 0">
-                                <CheckBox.Template>
-                                    <ControlTemplate TargetType="CheckBox">
-                                        <StackPanel Margin="10" Orientation="Horizontal">
-                                            <Ellipse
-                                                Width="24"
-                                                Height="24"
-                                                Fill="Transparent"
-                                                Stroke="{DynamicResource {x:Static SystemColors.ControlBrushKey}}"
-                                                StrokeThickness="2">
-                                                <Ellipse.Style>
-                                                    <Style TargetType="Ellipse">
-                                                        <Setter Property="Fill" Value="Transparent" />
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsChecked, RelativeSource={RelativeSource TemplatedParent}}" Value="True">
-                                                                <Setter Property="Fill" Value="#FF2196F3" />
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </Ellipse.Style>
-                                            </Ellipse>
-                                            <TextBlock
-                                                Margin="5,5,0,0"
-                                                HorizontalAlignment="Center"
-                                                Text="高动态(HDR)" />
-                                        </StackPanel>
-                                    </ControlTemplate>
-                                </CheckBox.Template>
-                            </CheckBox>
-
-                            <!--  High Gain CheckBox  -->
-                            <CheckBox
-                                x:Name="HighGainCheckBox"
-                                IsChecked="{Binding IsHighGainSelected}"
-                                ToolTip="高增益模式 - 增益值: 1 (默认)">
-                                <CheckBox.Template>
-                                    <ControlTemplate TargetType="CheckBox">
-                                        <StackPanel Margin="10" Orientation="Horizontal">
-                                            <Ellipse
-                                                Width="24"
-                                                Height="24"
-                                                Fill="Transparent"
-                                                Stroke="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}"
-                                                StrokeThickness="2">
-                                                <Ellipse.Style>
-                                                    <Style TargetType="Ellipse">
-                                                        <Setter Property="Fill" Value="Transparent" />
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsChecked, RelativeSource={RelativeSource TemplatedParent}}" Value="True">
-                                                                <Setter Property="Fill" Value="#FF4CAF50" />
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </Ellipse.Style>
-                                            </Ellipse>
-                                            <TextBlock
-                                                Margin="5,5,0,0"
-                                                HorizontalAlignment="Center"
-                                                Text="高增益(High Gain)" />
-                                        </StackPanel>
-                                    </ControlTemplate>
-                                </CheckBox.Template>
-                            </CheckBox>
-
-                            <!--  Low Gain CheckBox  -->
-                            <CheckBox
-                                x:Name="LowGainCheckBox"
-                                IsChecked="{Binding IsLowGainSelected}"
-                                ToolTip="低增益模式 - 增益值: 2">
-                                <CheckBox.Template>
-                                    <ControlTemplate TargetType="CheckBox">
-                                        <StackPanel Margin="10" Orientation="Horizontal">
-                                            <Ellipse
-                                                Width="24"
-                                                Height="24"
-                                                Fill="Transparent"
-                                                Stroke="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}"
-                                                StrokeThickness="2">
-                                                <Ellipse.Style>
-                                                    <Style TargetType="Ellipse">
-                                                        <Setter Property="Fill" Value="Transparent" />
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsChecked, RelativeSource={RelativeSource TemplatedParent}}" Value="True">
-                                                                <Setter Property="Fill" Value="#FFFF9800" />
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </Ellipse.Style>
-                                            </Ellipse>
-                                            <TextBlock
-                                                Margin="5,5,0,0"
-                                                HorizontalAlignment="Center"
-                                                Text="低增益(Low Gain)" />
-                                        </StackPanel>
-                                    </ControlTemplate>
-                                </CheckBox.Template>
-                            </CheckBox>
-
-
-                        </StackPanel>
-                    </GroupBox>
-
                     <GroupBox Header="曝光(ms)" IsEnabled="{Binding IsStartAcquisition}">
                         <DockPanel>
-
-                            <liftui:NumericUpDown
+                            <TextBox
+                                x:Name="ExposureTextBox"
                                 Width="75"
-                                Height="30"
-                                Padding="8,7,5,5"
+                                HorizontalAlignment="Stretch"
                                 DockPanel.Dock="Right"
-                                FontSize="12"
-                                Increment="1"
-                                Maximum="500"
-                                Minimum="10"
-                                ValueFormat="N0"
-                                Value="{Binding ElementName=ExposeSlider, Path=Value, Delay=100}" />
+                                KeyDown="ExposureTextBox_KeyDown"
+                                Text="{Binding Exposure, StringFormat={}{0:F0}, Mode=TwoWay, UpdateSourceTrigger=Explicit}"
+                                ToolTip="Enter确认输入" />
 
                             <ToggleButton
                                 x:Name="AutoExpose"
@@ -381,7 +163,6 @@
                                 HorizontalAlignment="Right"
                                 VerticalAlignment="Top"
                                 liftui:StatusSwitchElement.HideUncheckedElement="False"
-                                Command="{Binding SetAutoExposureCommand}"
                                 DockPanel.Dock="Right"
                                 Focusable="True"
                                 IsChecked="{Binding IsAutoExposure}"
@@ -423,8 +204,8 @@
                                 Margin="-5,0,10,0"
                                 VerticalAlignment="Center"
                                 IsSnapToTickEnabled="True"
-                                Maximum="500"
-                                Minimum="10"
+                                Maximum="{Binding ExposureRangeMax}"
+                                Minimum="{Binding ExposureRangeMin}"
                                 TickFrequency="1"
                                 Value="{Binding Exposure, Mode=TwoWay, Delay=100}" />
 
@@ -434,29 +215,22 @@
                     <GroupBox Header="色阶" IsEnabled="{Binding IsStartAcquisition}">
                         <DockPanel>
 
-                            <liftui:NumericUpDown
+                            <TextBox
                                 Width="75"
-                                Height="30"
-                                Padding="8,7,5,5"
+                                HorizontalAlignment="Stretch"
                                 DockPanel.Dock="Right"
-                                FontSize="12"
-                                Increment="1"
-                                Maximum="500"
-                                Minimum="10"
-                                ValueFormat="N0"
-                                Value="{Binding LeftLevel, Delay=100}" />
+                                KeyDown="LevelTextbox_KeyDown"
+                                Text="{Binding RightLevel, StringFormat={}{0:F0}, Mode=TwoWay, UpdateSourceTrigger=Explicit}"
+                                ToolTip="Enter确认输入" />
 
-                            <liftui:NumericUpDown
+                            <TextBox
+                                x:Name="LevelTextbox"
                                 Width="75"
-                                Height="30"
-                                Padding="8,7,5,5"
+                                HorizontalAlignment="Stretch"
                                 DockPanel.Dock="Right"
-                                FontSize="12"
-                                Increment="1"
-                                Maximum="500"
-                                Minimum="10"
-                                ValueFormat="N0"
-                                Value="{Binding RightLevel, Delay=100}" />
+                                KeyDown="LevelTextbox_KeyDown"
+                                Text="{Binding LeftLevel, StringFormat={}{0:F0}, Mode=TwoWay, UpdateSourceTrigger=Explicit}"
+                                ToolTip="Enter确认输入" />
 
                             <ToggleButton
                                 x:Name="AutoLevel"
@@ -465,10 +239,9 @@
                                 HorizontalAlignment="Right"
                                 VerticalAlignment="Top"
                                 liftui:StatusSwitchElement.HideUncheckedElement="False"
-                                Command="{Binding SetAutoExposureCommand}"
                                 DockPanel.Dock="Right"
                                 Focusable="True"
-                                IsChecked="{Binding IsAutoExpose}"
+                                IsChecked="{Binding IsAutoLevel}"
                                 Style="{DynamicResource ToggleButtonCustom}">
                                 <liftui:StatusSwitchElement.CheckedElement>
                                     <Border
@@ -509,9 +282,8 @@
                                 Margin="-5,0,10,0"
                                 VerticalAlignment="Center"
                                 IsSnapToTickEnabled="True"
-                                Maximum="500"
-                                Minimum="10"
                                 TickFrequency="1"
+                                Visibility="Collapsed"
                                 Value="{Binding Exposure, Mode=TwoWay, Delay=100}" />
 
                         </DockPanel>
@@ -528,14 +300,28 @@
                         <ComboBox
                             x:Name="ROIComboBox"
                             ItemsSource="{Binding RoiList}"
-                            SelectedIndex="{Binding RoiIndex}" />
+                            SelectedItem="{Binding SelectedROI}" />
                     </GroupBox>
 
                     <GroupBox Header="模式选择" IsEnabled="{Binding IsStartAcquisition}">
                         <ComboBox
                             x:Name="ModeComboBox"
-                            ItemsSource="{Binding ImageModeandGlobalGainList}"
-                            SelectedIndex="{Binding ImageModeandGlobalGainIndex}" />
+                            ItemsSource="{Binding ImageModeList}"
+                            SelectedIndex="{Binding ImageModeIndex}" />
+                    </GroupBox>
+
+                    <GroupBox Header="增益选择" IsEnabled="{Binding IsStartAcquisition}">
+                        <ComboBox
+                            x:Name="GainComboBox"
+                            ItemsSource="{Binding GainList}"
+                            SelectedIndex="{Binding GainIndex}" />
+                    </GroupBox>
+
+                    <GroupBox Header="组合模式选择" IsEnabled="{Binding IsStartAcquisition}">
+                        <ComboBox
+                            x:Name="CompositeModeComboBox"
+                            ItemsSource="{Binding CompositeModeList}"
+                            SelectedIndex="{Binding CompositeModeIndex}" />
                     </GroupBox>
 
                     <GroupBox Header="图像旋转" IsEnabled="{Binding IsStartAcquisition}">
@@ -674,7 +460,7 @@
                     <Button
                         x:Name="CaptureAsync"
                         Height="32"
-                        Command="{Binding CaptureAsyCommand}"
+                        Command="{Binding CaptureCommand}"
                         Content="图像捕获"
                         FontSize="13"
                         IsEnabled="{Binding IsStartAcquisition}" />
@@ -691,10 +477,9 @@
                         Width="Auto"
                         Margin="10,0,10,0"
                         liftui:StatusSwitchElement.HideUncheckedElement="False"
-                        Command="{Binding StartCaptureCommand}"
                         Focusable="False"
                         IsChecked="{Binding IsStartAcquisition}"
-                        IsEnabled="{Binding IsCapure}"
+                        IsEnabled="{Binding IsConnected}"
                         Style="{DynamicResource ToggleButtonCustom}">
 
                         <liftui:StatusSwitchElement.CheckedElement>
